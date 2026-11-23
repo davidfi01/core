@@ -1,0 +1,61 @@
+name: ESI R2D7 check (fork only)
+
+on:
+  push:
+    branches: [esi-r2d7-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: Build venv
+        run: |
+          uv venv venv --python "$(cat .python-version)"
+          source venv/bin/activate
+          uv pip install -r requirements.txt -r requirements_test.txt -r requirements_test_pre_commit.txt "esi-r2d7==0.1.0"
+          uv pip install -e . -e packages/hassfest -e packages/pytest-homeassistant --config-settings editable_mode=compat
+      - name: Generate files
+        run: |
+          source venv/bin/activate
+          python -m script.hassfest --action generate || true
+          python -m script.gen_requirements_all
+          git add -N .
+          git diff -- . ':!.github' > generated.patch
+          cat generated.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-patch
+          path: generated.patch
+      - name: Hassfest validate
+        run: |
+          source venv/bin/activate
+          python -m script.hassfest --integration-path homeassistant/components/esi_r2d7
+          python -m script.hassfest --action validate
+      - name: Ruff
+        if: always()
+        run: |
+          source venv/bin/activate
+          ruff check homeassistant/components/esi_r2d7 tests/components/esi_r2d7
+          ruff format --check --diff homeassistant/components/esi_r2d7 tests/components/esi_r2d7
+      - name: Pytest
+        if: always()
+        run: |
+          source venv/bin/activate
+          python -m pytest tests/components/esi_r2d7 -p no:sugar --cov=homeassistant.components.esi_r2d7 --cov-report=term-missing -o console_output_style=classic
+      - name: Mypy
+        if: always()
+        run: |
+          source venv/bin/activate
+          mypy homeassistant/components/esi_r2d7
+      - name: Pylint
+        if: always()
+        run: |
+          source venv/bin/activate
+          pylint homeassistant/components/esi_r2d7 tests/components/esi_r2d7
