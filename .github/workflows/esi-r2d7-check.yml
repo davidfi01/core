@@ -48,6 +48,7 @@ jobs:
         if: always()
         run: |
           source venv/bin/activate
+          python3 -m script.translations develop --all
           python -m pytest tests/components/esi_r2d7 -p no:sugar --cov=homeassistant.components.esi_r2d7 --cov-report=term-missing -o console_output_style=classic
       - name: Mypy
         if: always()
